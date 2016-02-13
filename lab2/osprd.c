@@ -126,10 +126,10 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
 	if (request_type == READ) {
-			memcpy((void*)req->buffer, (void*)data_ptr, req->current_nr_sectors * SECTOR_SIZE);
+		memcpy((void*)req->buffer, (void*)data_ptr, req->current_nr_sectors * SECTOR_SIZE);
 	}
 	else if (request_type == WRITE) {
-
+		memcpy((void*)data_ptr, (void*)req->buffer, req->current_nr_sectors * SECTOR_SIZE);
 	}
 	eprintk("Should process request...\n");
 
