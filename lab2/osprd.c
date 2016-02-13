@@ -65,6 +65,8 @@ typedef struct osprd_info {
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
 
+	unsigned num_write_locks, num_read_locks;
+
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
@@ -233,6 +235,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to acquire\n");
+		if (filp_writable) {
+		}
+		else {
+		}
 		r = -ENOTTY;
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
