@@ -106,8 +106,15 @@ int linked_list_remove(linked_list_t *ll, unsigned pid) {
 	while (currNode != NULL) {
 		if (currNode->pid == pid) {
 			node_t *del = currNode;
-			prevNode = currNode;
 			currNode = currNode->next;
+			if (prevNode != NULL) {
+				// not first node
+				prevNode->next = currNode;
+			}
+			else {
+				// removing first node
+				ll->head = currNode;
+			}
 			ll->size--;
 			kfree(del);
 
@@ -125,6 +132,7 @@ int linked_list_count(linked_list_t *ll, int pid) {
 	while (curr) {
 		if (curr->pid == pid)
 			return 1;
+		curr = curr->next;
 	}
 	return 0;
 }
@@ -385,6 +393,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				&& d->read_locking_pids.size == 0
 				)) {
 				eprintk("wait_event_interruptible: %d\n", current->pid);
+				//osp_spin_lock(&d->mutex);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// this process is being served
@@ -394,8 +403,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				}
 				else {
 					// not being served
+
+					// add spin lock for good measure
+					osp_spin_lock(&d->mutex);
 					linked_list_push(&d->invalid_tickets, my_ticket);
+					osp_spin_unlock(&d->mutex);
 				}
+				//osp_spin_unlock(&d->mutex);
 				return -ERESTARTSYS;
 			}
 			else {
@@ -418,6 +432,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				(eprintk("read locking size: %d\nticket_tail: %d\nmy_ticket: %d\n", d->read_locking_pids.size, d->ticket_tail, my_ticket) || 1)
 				&&   d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0)) {
+				//osp_spin_lock(&d->mutex);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// this process is being served
@@ -427,8 +442,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				}
 				else {
 					// not being served
+
+					// add spin lock for good measure
+					osp_spin_lock(&d->mutex);
 					linked_list_push(&d->invalid_tickets, my_ticket);
+					osp_spin_unlock(&d->mutex);
 				}
+				//osp_spin_unlock(&d->mutex);
 				return -ERESTARTSYS;
 			}
 			else {
