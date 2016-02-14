@@ -63,7 +63,15 @@ void linked_list_push(linked_list_t *ll, int pid) {
 }
 
 int linked_list_pop(linked_list_t *ll) {
-
+	if (!ll->head) {
+		return -1;
+	}
+	node_t *old_head = ll->head;
+	int old_pid = old_head->pid;
+	ll->head = ll->head->next;
+	kfree(old_head);
+	ll->size--;
+	return old_pid;
 }
 
 void linked_list_free(linked_list_t *ll) {
