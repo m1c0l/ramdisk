@@ -46,6 +46,30 @@ static int nsectors = 32;
 module_param(nsectors, int, 0);
 
 
+/* Linked list for locking pids */
+typedef struct node {
+	struct node *next;
+	int pid;
+} node_t;
+
+typedef struct linked_list {
+	node_t *head;
+	node_t *tail;
+	int size;
+} linked_list_t;
+
+void linked_list_push(linked_list_t *ll, int pid) {
+
+}
+
+int linked_list_pop(linked_list_t *ll) {
+
+}
+
+void linked_list_free(linked_list_t *ll) {
+
+}
+
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
