@@ -97,6 +97,28 @@ void linked_list_free(linked_list_t *ll) {
 	}
 }
 
+
+int linked_list_remove(linked_list_t *ll, unsigned pid) {
+	// iterate through list and check node's pid against parameter
+	node_t *prevNode = NULL;
+	node_t *currNode = ll->head;
+	while (currNode != NULL) {
+		if (currNode->pid == pid) {
+			node_t *del = currNode;
+			prevNode = currNode;
+			currNode = currNode->next;
+			ll->size--;
+			kfree(del);
+
+			return 1;
+		}
+		prevNode = currNode;
+		currNode = currNode->next;
+	}
+	// pid not found
+	return 0;
+}
+
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
@@ -306,8 +328,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// locked
-					//d->ticket_tail = return_valid_ticket(
-						//d->invalid_tickets, d->ticket_tail + 1);
+					d->ticket_tail = return_valid_ticket(
+						d->invalid_tickets, d->ticket_tail + 1);
 					wake_up_all(&d->blockq);
 				}
 				else {
@@ -373,7 +395,35 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
-		r = -ENOTTY;
+		if (!(filp->f_flags & F_OSPRD_LOCKED)) {
+			// ramdisk isn't locked
+			return -EINVAL;
+		}
+		if (filp_writable) {
+			// see if this process has write lock
+			if (d->write_locking_pid != current->pid) {
+				return -EINVAL;
+			}
+			d->write_locking_pid = 0;
+			if (d->read_locking_pids.size == 0) {
+				filp->f_flags ^= F_OSPRD_LOCKED;
+			}
+			wake_up_all(&d->blockq);
+			return 0;
+		}
+		else {
+			if (d->read_locking_pids.size == 0) {
+				return -EINVAL;
+			}
+			if (linked_list_remove(&d->read_locking_pids, current->pid)) {
+				if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
+					filp->f_flags ^= F_OSPRD_LOCKED;
+				}
+				wake_up_all(&d->blockq);
+				return 0;
+			}
+			return -EINVAL;
+		}
 
 	} else
 		r = -ENOTTY; /* unknown command */
