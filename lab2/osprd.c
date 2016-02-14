@@ -59,7 +59,14 @@ typedef struct linked_list {
 } linked_list_t;
 
 void linked_list_push(linked_list_t *ll, int pid) {
-
+	node_t *new_node = (node_t*)kmalloc(sizeof(node_t), GFP_ATOMIC);
+	if (ll->tail) {
+		ll->tail->next = new_node;
+	} else {
+		ll->head = new_node;
+	}
+	ll->tail = new_node;
+	ll->size++;
 }
 
 int linked_list_pop(linked_list_t *ll) {
