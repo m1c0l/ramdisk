@@ -117,7 +117,9 @@ typedef struct osprd_info {
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
 
-	unsigned num_write_locks, num_read_locks;
+	linked_list_t read_locking_pids;
+	unsigned write_locking_pid;
+	linked_list_t invalid_tickets;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -333,6 +335,8 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+	linked_list_init(&d->read_locking_pids);
+	linked_list_init(&d->invalid_tickets);
 }
 
 
@@ -446,6 +450,9 @@ static void cleanup_device(osprd_info_t *d)
 		blk_cleanup_queue(d->queue);
 	if (d->data)
 		vfree(d->data);
+
+	linked_list_free(&d->read_locking_pids);
+	linked_list_free(&d->invalid_tickets);
 }
 
 
