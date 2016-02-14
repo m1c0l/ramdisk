@@ -379,8 +379,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to acquire\n");
 		unsigned my_ticket;
-		// TODO: deadlock protection
+		// check deadlock protection
 		osp_spin_lock(&d->mutex);
+		if (d->write_locking_pid == current->pid) {
+			osp_spin_unlock(&d->mutex);
+			return -EDEADLK;
+		}
 		my_ticket = d->ticket_head;
 		d->ticket_head++;
 		osp_spin_unlock(&d->mutex);
