@@ -262,8 +262,6 @@ static int osprd_open(struct inode *inode, struct file *filp)
 // last copy is closed.)
 static int osprd_close_last(struct inode *inode, struct file *filp)
 {
-
-/*
 	if (filp) {
 		osprd_info_t *d = file2osprd(filp);
 		//int filp_writable = filp->f_mode & FMODE_WRITE;
@@ -273,46 +271,9 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 
 		// Your code here.
-
-		//BEGIN TUAN
-
-		if (d == NULL) {
-			return 1;
-			//TUAN Note: return -EINVAL here causes test case 9 to pause
-		}
-
-		//Below part is identical to the implementation of OSPRDIOCRELEASE
-
-		osp_spin_lock(&(d->mutex));
-		//TUAN Note: pidInList returns 1 if pid is in the list, 0 otherwise.
-
-		//TUAN: If the file hasn't locked the ramdisk, return -EINVAL.
-		if (d->write_locking_pid != current->pid && !linked_list_count(&d->read_locking_pids, current->pid)) {
-			osp_spin_unlock(&(d->mutex));
-			return -EINVAL;
-		}
-
-		if (d->write_locking_pid == current->pid) {
-			d->write_locking_pid = 0;
-		}
-
-		if (linked_list_count(&d->read_locking_pids, current->pid)) {
-			linked_list_remove(&d->read_locking_pids, current->pid);
-		}
-
-		// TUAN: Clear the lock from filp->f_flags if no processes (not just current process) hold any lock.
-		if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
-			filp->f_flags ^= F_OSPRD_LOCKED;
-		}
-
-		osp_spin_unlock(&(d->mutex));
-		wake_up_all(&(d->blockq));
-
-		//END TUAN
-	}
-	*/
-	if (filp)
 		osprd_ioctl(inode, filp, OSPRDIOCRELEASE, 0);
+	}
+	
 	return 0;
 }
 
