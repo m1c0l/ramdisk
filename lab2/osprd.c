@@ -456,7 +456,28 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to try acquire\n");
-		r = -ENOTTY;
+		if (filp_writable) {
+			osp_spin_lock(&d->mutex);
+			if (d->write_locking_pid != 0 || d->read_locking_pids.size != 0) {
+				osp_spin_unlock(&d->mutex);
+				return -EBUSY;
+			}
+			filp->f_flags |= F_OSPRD_LOCKED;
+			d->write_locking_pid = current->pid;
+			osp_spin_unlock(&d->mutex);
+			return 0;
+		}
+		else {
+			osp_spin_lock(&d->mutex);
+			if (d->write_locking_pid != 0) {
+				osp_spin_unlock(&d->mutex);
+				return -EBUSY;
+			}
+			filp->f_flags |= F_OSPRD_LOCKED;
+			linked_list_push(&d->read_locking_pids, current->pid);
+			osp_spin_unlock(&d->mutex);
+			return 0;
+		}
 
 	} else if (cmd == OSPRDIOCRELEASE) {
 
