@@ -289,17 +289,25 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to acquire\n");
+		unsigned my_ticket;
+		// TODO: deadlock protection
+		osp_spin_lock(&d->mutex);
+		my_ticket = d->ticket_head;
+		d->ticket_head++;
+		osp_spin_unlock(&d->mutex);
+		//eprintk("pid = %d\n", current->pid);
+		
 		if (filp_writable) {
 			// write lock
 			if (wait_event_interruptible(d->blockq,
 				   d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0
-				&& d->read_locking_pids->size == 0)) {
+				&& d->read_locking_pids.size == 0)) {
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// locked
-					d->ticket_tail = return_valid_ticket(
-						d->invalid_tickets, d->ticket_tail + 1);
+					//d->ticket_tail = return_valid_ticket(
+						//d->invalid_tickets, d->ticket_tail + 1);
 					wake_up_all(&d->blockq);
 				}
 				else {
@@ -310,12 +318,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
+				filp->f_flags |= F_OSPRD_LOCKED;
+				return 0;
 			}
 		}
 		else {
 			//read lock
 		}
-		r = -ENOTTY;
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
