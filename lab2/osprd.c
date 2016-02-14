@@ -291,13 +291,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		eprintk("Attempting to acquire\n");
 		if (filp_writable) {
 			// write lock
-			if (1) {
+			if (wait_event_interruptible(d->blockq,
+				   d->ticket_tail == my_ticket
+				&& d->write_locking_pid == 0
+				&& d->read_locking_pids->size == 0)) {
 				// if blocked
-				if(1) {
+				if(d->ticket_tail == my_ticket) {
 					// locked
+					d->ticket_tail = return_valid_ticket(
+						d->invalid_tickets, d->ticket_tail + 1);
+					wake_up_all(&d->blockq);
 				}
 				else {
 					// not locked
+					linked_list_push(&d->invalid_tickets, my_ticket);
 				}
 				return -ERESTARTSYS;
 			}
