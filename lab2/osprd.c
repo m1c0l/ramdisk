@@ -88,7 +88,13 @@ int linked_list_pop(linked_list_t *ll) {
 }
 
 void linked_list_free(linked_list_t *ll) {
-
+	node_t *curr = ll->head;
+	node_t *next;
+	while (curr) {
+		next = curr->next;
+		kfree(curr);
+		curr = next;
+	}
 }
 
 /* The internal representation of our device. */
