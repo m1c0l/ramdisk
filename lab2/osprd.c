@@ -418,6 +418,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		if (filp_writable) {
 			// see if this process has write lock
+			osp_spin_lock(&d->mutex);
 			if (d->write_locking_pid != current->pid) {
 				return -EINVAL;
 			}
@@ -425,6 +426,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->read_locking_pids.size == 0) {
 				filp->f_flags ^= F_OSPRD_LOCKED;
 			}
+			osp_spin_unlock(&d->mutex);
 			wake_up_all(&d->blockq);
 			return 0;
 		}
@@ -432,14 +434,17 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->read_locking_pids.size == 0) {
 				return -EINVAL;
 			}
-			if (linked_list_remove(&d->read_locking_pids, current->pid)) {
+			osp_spin_lock(&d->mutex);
+			int removeStatus = linked_list_remove(&d->read_locking_pids, current->pid);
+			if (removeStatus) {
 				if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
 					filp->f_flags ^= F_OSPRD_LOCKED;
 				}
 				wake_up_all(&d->blockq);
-				return 0;
+				//return 0;
 			}
-			return -EINVAL;
+			osp_spin_unlock(&d->mutex);
+			return removeStatus ? 0 : -EINVAL;
 		}
 
 	} else
