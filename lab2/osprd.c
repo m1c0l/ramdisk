@@ -290,8 +290,23 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to acquire\n");
 		if (filp_writable) {
+			// write lock
+			if (1) {
+				// if blocked
+				if(1) {
+					// locked
+				}
+				else {
+					// not locked
+				}
+				return -ERESTARTSYS;
+			}
+			else {
+				// acquire the lock
+			}
 		}
 		else {
+			//read lock
 		}
 		r = -ENOTTY;
 
