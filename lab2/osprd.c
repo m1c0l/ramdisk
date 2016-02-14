@@ -49,13 +49,13 @@ module_param(nsectors, int, 0);
 /* Linked list for locking pids */
 typedef struct node {
 	struct node *next;
-	int pid;
+	unsigned pid;
 } node_t;
 
 typedef struct linked_list {
 	node_t *head;
 	node_t *tail;
-	int size;
+	unsigned size;
 } linked_list_t;
 
 void linked_list_init(linked_list_t *ll) {
@@ -63,7 +63,7 @@ void linked_list_init(linked_list_t *ll) {
 	ll->size = 0;
 }
 
-void linked_list_push(linked_list_t *ll, int pid) {
+void linked_list_push(linked_list_t *ll, unsigned pid) {
 	node_t *new_node = (node_t*)kmalloc(sizeof(node_t), GFP_ATOMIC);
 	new_node->next = NULL;
 	if (ll->tail) {
@@ -75,12 +75,12 @@ void linked_list_push(linked_list_t *ll, int pid) {
 	ll->size++;
 }
 
-int linked_list_pop(linked_list_t *ll) {
+unsigned linked_list_pop(linked_list_t *ll) {
 	if (!ll->head) {
-		return -1;
+		return 0;
 	}
 	node_t *old_head = ll->head;
-	int old_pid = old_head->pid;
+	unsigned old_pid = old_head->pid;
 	ll->head = ll->head->next;
 	kfree(old_head);
 	ll->size--;
