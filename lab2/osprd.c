@@ -324,6 +324,30 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		else {
 			//read lock
+			if (wait_event_interruptible(d->blockq,
+				   d->ticket_tail == my_ticket
+				&& d->write_locking_pid == 0)) {
+				// if blocked
+				if(d->ticket_tail == my_ticket) {
+					// locked
+					d->ticket_tail = return_valid_ticket(
+						d->invalid_tickets, d->ticket_tail + 1);
+					wake_up_all(&d->blockq);
+				}
+				else {
+					// not locked
+					linked_list_push(&d->invalid_tickets, my_ticket);
+				}
+				return -ERESTARTSYS;
+			}
+			else {
+				// acquire the lock
+				filp->f_flags |= F_OSPRD_LOCKED;
+				linked_list_push(&d->read_locking_pids, current->pid);
+				d->ticket_tail = return_valid_ticket(
+					d->invalid_tickets, d->ticket_tail+1);
+				return 0;
+			}
 		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
