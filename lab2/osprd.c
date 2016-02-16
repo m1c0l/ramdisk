@@ -97,7 +97,6 @@ void linked_list_free(linked_list_t *ll) {
 	}
 }
 
-
 int linked_list_remove(linked_list_t *ll, unsigned pid) {
 	// iterate through list and check node's pid against parameter
 	node_t *prevNode = NULL;
@@ -117,6 +116,21 @@ int linked_list_remove(linked_list_t *ll, unsigned pid) {
 	}
 	// pid not found
 	return 0;
+}
+
+int linked_list_count(linked_list_t *ll, int pid) {
+	node_t *curr = ll->head;
+	while (curr) {
+		if (curr->pid == pid)
+			return 1;
+	}
+	return 0;
+}
+
+int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
+	while (linked_list_count(invalid_tickets, ticket_tail))
+		ticket_tail++;
+	return ticket_tail;
 }
 
 /* The internal representation of our device. */
@@ -318,7 +332,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		d->ticket_head++;
 		osp_spin_unlock(&d->mutex);
 		//eprintk("pid = %d\n", current->pid);
-		
+
 		if (filp_writable) {
 			// write lock
 			if (wait_event_interruptible(d->blockq,
@@ -327,13 +341,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				&& d->read_locking_pids.size == 0)) {
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
-					// locked
+					// this process is being served
 					d->ticket_tail = return_valid_ticket(
-						d->invalid_tickets, d->ticket_tail + 1);
+						&d->invalid_tickets, d->ticket_tail + 1);
 					wake_up_all(&d->blockq);
 				}
 				else {
-					// not locked
+					// not being served
 					linked_list_push(&d->invalid_tickets, my_ticket);
 				}
 				return -ERESTARTSYS;
@@ -341,6 +355,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			else {
 				// acquire the lock
 				filp->f_flags |= F_OSPRD_LOCKED;
+				d->write_locking_pid = current->pid;
+				d->ticket_tail = return_valid_ticket(
+					&d->invalid_tickets, d->ticket_tail+1);
 				return 0;
 			}
 		}
@@ -351,13 +368,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				&& d->write_locking_pid == 0)) {
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
-					// locked
+					// this process is being served
 					d->ticket_tail = return_valid_ticket(
-						d->invalid_tickets, d->ticket_tail + 1);
+						&d->invalid_tickets, d->ticket_tail + 1);
 					wake_up_all(&d->blockq);
 				}
 				else {
-					// not locked
+					// not being served
 					linked_list_push(&d->invalid_tickets, my_ticket);
 				}
 				return -ERESTARTSYS;
@@ -367,7 +384,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				filp->f_flags |= F_OSPRD_LOCKED;
 				linked_list_push(&d->read_locking_pids, current->pid);
 				d->ticket_tail = return_valid_ticket(
-					d->invalid_tickets, d->ticket_tail+1);
+					&d->invalid_tickets, d->ticket_tail+1);
 				return 0;
 			}
 		}
