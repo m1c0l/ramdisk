@@ -128,8 +128,12 @@ int linked_list_count(linked_list_t *ll, int pid) {
 }
 
 int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
-	while (linked_list_count(invalid_tickets, ticket_tail))
-		ticket_tail++;
+	while (ticket_tail++) {
+		if (linked_list_count(invalid_tickets, ticket_tail))
+			linked_list_remove(invalid_tickets, ticket_tail);
+		else
+			break;
+	}
 	return ticket_tail;
 }
 
@@ -245,9 +249,10 @@ static int osprd_open(struct inode *inode, struct file *filp)
 // last copy is closed.)
 static int osprd_close_last(struct inode *inode, struct file *filp)
 {
+
 	if (filp) {
 		osprd_info_t *d = file2osprd(filp);
-		int filp_writable = filp->f_mode & FMODE_WRITE;
+		//int filp_writable = filp->f_mode & FMODE_WRITE;
 
 		// EXERCISE: If the user closes a ramdisk file that holds
 		// a lock, release the lock.  Also wake up blocked processes
@@ -255,11 +260,42 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		// Your code here.
 
-		// This line avoids compiler warnings; you may remove it.
-		(void) filp_writable, (void) d;
+		//BEGIN TUAN
 
+		if (d == NULL) {
+			return 1;
+			//TUAN Note: return -EINVAL here causes test case 9 to pause
+		}
+
+		//Below part is identical to the implementation of OSPRDIOCRELEASE
+
+		osp_spin_lock(&(d->mutex));
+		//TUAN Note: pidInList returns 1 if pid is in the list, 0 otherwise.
+
+		//TUAN: If the file hasn't locked the ramdisk, return -EINVAL.
+		if (d->write_locking_pid != current->pid && !linked_list_count(&d->read_locking_pids, current->pid)) {
+			osp_spin_unlock(&(d->mutex));
+			return -EINVAL;
+		}
+
+		if (d->write_locking_pid == current->pid) {
+			d->write_locking_pid = 0;
+		}
+
+		if (linked_list_count(&d->read_locking_pids, current->pid)) {
+			linked_list_remove(&d->read_locking_pids, current->pid);
+		}
+
+		// TUAN: Clear the lock from filp->f_flags if no processes (not just current process) hold any lock.
+		if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
+			filp->f_flags ^= F_OSPRD_LOCKED;
+		}
+
+		osp_spin_unlock(&(d->mutex));
+		wake_up_all(&(d->blockq));
+
+		//END TUAN
 	}
-
 	return 0;
 }
 
@@ -331,7 +367,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		my_ticket = d->ticket_head;
 		d->ticket_head++;
 		osp_spin_unlock(&d->mutex);
-		//eprintk("pid = %d\n", current->pid);
+		eprintk("pid = %d\n", current->pid);
 
 		if (filp_writable) {
 			// write lock
@@ -339,6 +375,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				   d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0
 				&& d->read_locking_pids.size == 0)) {
+				eprintk("wait_event_interruptible: %d\n", current->pid);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// this process is being served
@@ -354,10 +391,14 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
+				eprintk("acquire write lock\n");
+				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				d->write_locking_pid = current->pid;
 				d->ticket_tail = return_valid_ticket(
 					&d->invalid_tickets, d->ticket_tail+1);
+				osp_spin_unlock(&d->mutex);
+				wake_up_all(&d->blockq);
 				return 0;
 			}
 		}
@@ -381,10 +422,14 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
+				eprintk("read lock\n");
+				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				linked_list_push(&d->read_locking_pids, current->pid);
 				d->ticket_tail = return_valid_ticket(
 					&d->invalid_tickets, d->ticket_tail+1);
+				osp_spin_unlock(&d->mutex);
+				wake_up_all(&d->blockq);
 				return 0;
 			}
 		}
