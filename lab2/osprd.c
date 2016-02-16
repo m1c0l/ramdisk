@@ -128,7 +128,7 @@ int linked_list_count(linked_list_t *ll, int pid) {
 }
 
 int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
-	while (ticket_tail++) {
+	while (++ticket_tail) {
 		if (linked_list_count(invalid_tickets, ticket_tail))
 			linked_list_remove(invalid_tickets, ticket_tail);
 		else
@@ -250,6 +250,7 @@ static int osprd_open(struct inode *inode, struct file *filp)
 static int osprd_close_last(struct inode *inode, struct file *filp)
 {
 
+/*
 	if (filp) {
 		osprd_info_t *d = file2osprd(filp);
 		//int filp_writable = filp->f_mode & FMODE_WRITE;
@@ -296,6 +297,9 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		//END TUAN
 	}
+	*/
+	if (filp)
+		osprd_ioctl(inode, filp, OSPRDIOCRELEASE, 0);
 	return 0;
 }
 
@@ -370,17 +374,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		eprintk("pid = %d\n", current->pid);
 
 		if (filp_writable) {
+			eprintk("write %d\n", d->write_locking_pid);
 			// write lock
 			if (wait_event_interruptible(d->blockq,
-				   d->ticket_tail == my_ticket
+				(eprintk("write locking: %d\nticket_tail: %d\nmy_ticket: %d\nsize: %d\n", d->write_locking_pid, d->ticket_tail, my_ticket, d->read_locking_pids.size) || 1)
+				&&   d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0
-				&& d->read_locking_pids.size == 0)) {
+				&& d->read_locking_pids.size == 0
+				)) {
 				eprintk("wait_event_interruptible: %d\n", current->pid);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// this process is being served
 					d->ticket_tail = return_valid_ticket(
-						&d->invalid_tickets, d->ticket_tail + 1);
+						&d->invalid_tickets, d->ticket_tail);
 					wake_up_all(&d->blockq);
 				}
 				else {
@@ -396,7 +403,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				filp->f_flags |= F_OSPRD_LOCKED;
 				d->write_locking_pid = current->pid;
 				d->ticket_tail = return_valid_ticket(
-					&d->invalid_tickets, d->ticket_tail+1);
+					&d->invalid_tickets, d->ticket_tail);
 				osp_spin_unlock(&d->mutex);
 				wake_up_all(&d->blockq);
 				return 0;
@@ -404,14 +411,16 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		else {
 			//read lock
+			eprintk("read\n");
 			if (wait_event_interruptible(d->blockq,
-				   d->ticket_tail == my_ticket
+				(eprintk("read locking size: %d\nticket_tail: %d\nmy_ticket: %d\n", d->read_locking_pids.size, d->ticket_tail, my_ticket) || 1)
+				&&   d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0)) {
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
 					// this process is being served
 					d->ticket_tail = return_valid_ticket(
-						&d->invalid_tickets, d->ticket_tail + 1);
+						&d->invalid_tickets, d->ticket_tail);
 					wake_up_all(&d->blockq);
 				}
 				else {
@@ -427,7 +436,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				filp->f_flags |= F_OSPRD_LOCKED;
 				linked_list_push(&d->read_locking_pids, current->pid);
 				d->ticket_tail = return_valid_ticket(
-					&d->invalid_tickets, d->ticket_tail+1);
+					&d->invalid_tickets, d->ticket_tail);
 				osp_spin_unlock(&d->mutex);
 				wake_up_all(&d->blockq);
 				return 0;
@@ -467,8 +476,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->write_locking_pid != current->pid) {
 				return -EINVAL;
 			}
+			eprintk("release\n");
 			d->write_locking_pid = 0;
 			if (d->read_locking_pids.size == 0) {
+				eprintk("unsetting flag\n");
 				filp->f_flags ^= F_OSPRD_LOCKED;
 			}
 			osp_spin_unlock(&d->mutex);
@@ -509,6 +520,7 @@ static void osprd_setup(osprd_info_t *d)
 	/* Add code here if you add fields to osprd_info_t. */
 	linked_list_init(&d->read_locking_pids);
 	linked_list_init(&d->invalid_tickets);
+	d->write_locking_pid = 0;
 }
 
 
