@@ -66,6 +66,7 @@ void linked_list_init(linked_list_t *ll) {
 void linked_list_push(linked_list_t *ll, unsigned pid) {
 	node_t *new_node = (node_t*)kmalloc(sizeof(node_t), GFP_ATOMIC);
 	new_node->next = NULL;
+	new_node->pid = pid;
 	if (ll->tail) {
 		ll->tail->next = new_node;
 	} else {
@@ -84,6 +85,7 @@ unsigned linked_list_pop(linked_list_t *ll) {
 	ll->head = ll->head->next;
 	kfree(old_head);
 	ll->size--;
+	eprintk("dec size: %d\n", ll->size);
 	return old_pid;
 }
 
@@ -487,11 +489,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return 0;
 		}
 		else {
+			eprintk("!!!!!reached\n");
 			if (d->read_locking_pids.size == 0) {
 				return -EINVAL;
 			}
 			osp_spin_lock(&d->mutex);
 			int removeStatus = linked_list_remove(&d->read_locking_pids, current->pid);
+			eprintk("%d\n", removeStatus);
 			if (removeStatus) {
 				if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
 					filp->f_flags ^= F_OSPRD_LOCKED;
