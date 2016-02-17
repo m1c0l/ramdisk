@@ -106,6 +106,8 @@ int linked_list_remove(linked_list_t *ll, unsigned pid) {
 	while (currNode != NULL) {
 		if (currNode->pid == pid) {
 			node_t *del = currNode;
+			if (currNode == ll->tail)
+				ll->tail = prevNode;
 			currNode = currNode->next;
 			if (prevNode != NULL) {
 				// not first node
@@ -115,6 +117,7 @@ int linked_list_remove(linked_list_t *ll, unsigned pid) {
 				// removing first node
 				ll->head = currNode;
 			}
+
 			ll->size--;
 			kfree(del);
 
