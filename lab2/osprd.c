@@ -167,6 +167,17 @@ uint32_t jenkins_hash(char *passwd, size_t len) {
 	return hash;
 }
 
+void xor_cipher(char *src, char *dest, size_t len, uint32_t hash) {
+	size_t i;
+	for (i = 0; i < len; i++) {
+		/* extract one byte of the hash */
+		int shift = (i % sizeof(uint32_t)) * 8;
+		char hash_byte = (hash >> shift) & 0xFF;
+
+		dest[i] = src[i] ^ hash_byte;
+	}
+}
+
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
@@ -239,7 +250,20 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	}
 
 	//char buf[] = "hello";
+	//uint32_t hash = jenkins_hash("password", 8);
 	//eprintk("encrypted: %zu\n", jenkins_hash(buf, 6));
+	//eprintk("initial: %s\n", buf);
+
+	//char buf2[6];
+	//xor_cipher(buf, buf2, 5, hash);
+	//buf2[5] = 0;
+	//eprintk("xor: %s\n", buf2);
+
+	//char buf3[6];
+	//xor_cipher(buf2, buf3, 5, hash);
+	//buf3[5] = 0;
+	//eprintk("xor*2: %s\n", buf3);
+
 
 	// EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
