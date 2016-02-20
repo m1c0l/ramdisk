@@ -249,22 +249,6 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		return;
 	}
 
-	//char buf[] = "hello";
-	//uint32_t hash = jenkins_hash("password", 8);
-	//eprintk("encrypted: %zu\n", jenkins_hash(buf, 6));
-	//eprintk("initial: %s\n", buf);
-
-	//char buf2[6];
-	//xor_cipher(buf, buf2, 5, hash);
-	//buf2[5] = 0;
-	//eprintk("xor: %s\n", buf2);
-
-	//char buf3[6];
-	//xor_cipher(buf2, buf3, 5, hash);
-	//buf3[5] = 0;
-	//eprintk("xor*2: %s\n", buf3);
-
-
 	// EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
 	// Hint: The 'struct request' argument tells you what kind of request
@@ -279,10 +263,12 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
 	if (request_type == READ) {
-		memcpy((void*)req->buffer, (void*)data_ptr, req->current_nr_sectors * SECTOR_SIZE);
+		memcpy((void*)req->buffer, (void*)data_ptr,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
 	else if (request_type == WRITE) {
-		memcpy((void*)data_ptr, (void*)req->buffer, req->current_nr_sectors * SECTOR_SIZE);
+		memcpy((void*)data_ptr, (void*)req->buffer,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
 	eprintk("Should process request...\n");
 
