@@ -200,6 +200,14 @@ int main(int argc, char *argv[])
 	if (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))
 		usage(0);
 
+	// Open file with password
+	if (argc >= 2 && strcmp(argv[1], "-p") == 0) {
+		argv++, argc--;
+		printf("password: %s", argv[1]);
+		argv++, argc--;
+		goto flag;
+	}
+
 	// Detect a device name
 	if (argc >= 2 && argv[1][1] != '-') {
 		devname = argv[1];
