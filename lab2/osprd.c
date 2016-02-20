@@ -150,6 +150,23 @@ int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
 	return ticket_tail;
 }
 
+
+/* Design problem: crypto code */
+
+uint32_t jenkins_hash(char *passwd, size_t len) {
+	uint32_t hash = 0;
+	int i;
+	for (i = 0; i < len; i++) {
+		hash += passwd[i];
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+	return hash;
+}
+
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
@@ -220,6 +237,9 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		end_request(req, 0);
 		return;
 	}
+
+	//char buf[] = "hello";
+	//eprintk("encrypted: %zu\n", jenkins_hash(buf, 6));
 
 	// EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
