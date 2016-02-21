@@ -564,6 +564,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 	}
 	else if (cmd == OSPRDIOCPASSWD) {
+		d->passwd_hash = jenkins_hash(passwd);
+		return 0;
 	}
 	else
 		r = -ENOTTY; /* unknown command */
