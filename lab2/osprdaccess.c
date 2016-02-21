@@ -141,6 +141,7 @@ int main(int argc, char *argv[])
 	double delay = 0;
 	double lock_delay = 0;
 	const char *devname = "/dev/osprda";
+	char *passwd = NULL;
 
  flag:
 	// Detect a read/write option
@@ -208,7 +209,14 @@ int main(int argc, char *argv[])
 	// Open file with password
 	if (argc >= 2 && strcmp(argv[1], "-p") == 0) {
 		argv++, argc--;
-		printf("password: %s", argv[1]);
+		printf("passwd!!!\n");
+		if (argc >= 2 && argv[1][0] != '-') {
+			printf("called\n");
+			passwd = argv[1];
+		}
+		else {
+			usage(1);
+		}
 		argv++, argc--;
 		goto flag;
 	}
@@ -253,6 +261,14 @@ int main(int argc, char *argv[])
 	if (lseek(devfd, offset, SEEK_SET) == (off_t) -1) {
 		perror("lseek");
 		exit(1);
+	}
+
+	// Set password
+	if (passwd) {
+		if (ioctl(devfd, OSPRDIOCPASSWD, passwd) == -1) {
+			perror("ioctl PASSWD");
+			exit(1);
+		}
 	}
 
 	// Read or write

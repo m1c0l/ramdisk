@@ -264,27 +264,14 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	uint8_t *data_ptr;
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
+	eprintk("passwd_hash: %d\n", d->passwd_hash);
 	if (request_type == READ) {
-		if (d->passwd_hash) {
-			xor_cipher(req->buffer, (char*)data_ptr,
-				req->current_nr_sectors * SECTOR_SIZE,
-				d->passwd_hash);
-		}
-		else { // no password
-			memcpy((void*)req->buffer, (void*)data_ptr,
-				req->current_nr_sectors * SECTOR_SIZE);
-		}
+		memcpy((void*)req->buffer, (void*)data_ptr,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
 	else if (request_type == WRITE) {
-		if (d->passwd_hash) {
-			xor_cipher((char*)data_ptr, req->buffer,
-				req->current_nr_sectors * SECTOR_SIZE,
-				d->passwd_hash);
-		}
-		else {
-			memcpy((void*)data_ptr, (void*)req->buffer,
-				req->current_nr_sectors * SECTOR_SIZE);
-		}
+		memcpy((void*)data_ptr, (void*)req->buffer,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
 	eprintk("Should process request...\n");
 
@@ -345,6 +332,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
+	eprintk("cmd: %d\n", cmd);
 
 	if (cmd == OSPRDIOCACQUIRE) {
 
@@ -564,11 +552,19 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 	}
 	else if (cmd == OSPRDIOCPASSWD) {
-		d->passwd_hash = jenkins_hash(passwd);
+		char *buf = (char*)kmalloc(20, GFP_ATOMIC);
+		if (copy_from_user(buf, (const char __user*) passwd, 20)) {
+			kfree(buf);
+			return -EFAULT;
+		}
+		d->passwd_hash = jenkins_hash(buf);
+		eprintk("OSPRDIOCPASSWD: %d\n", d->passwd_hash);
 		return 0;
 	}
-	else
+	else {
 		r = -ENOTTY; /* unknown command */
+		eprintk("not recognized\n");
+	}
 	return r;
 }
 
