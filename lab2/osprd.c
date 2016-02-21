@@ -153,7 +153,7 @@ int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
 
 /* Design problem: crypto code */
 
-uint32_t jenkins_hash(char *passwd) {
+uint8_t jenkins_hash(char *passwd) {
 	uint32_t hash = 0;
 	int i;
 	for (i = 0; passwd[i] != '\0'; i++) {
@@ -164,17 +164,18 @@ uint32_t jenkins_hash(char *passwd) {
 	hash += (hash << 3);
 	hash ^= (hash >> 11);
 	hash += (hash << 15);
-	return hash;
+	return (uint8_t)(hash & 0xFF);
 }
 
-void xor_cipher(char *src, char *dest, size_t len, uint32_t hash) {
+void xor_cipher(char *buf, size_t len, uint8_t hash) {
 	size_t i;
 	for (i = 0; i < len; i++) {
 		/* extract one byte of the hash */
-		int shift = (i % sizeof(uint32_t)) * 8;
-		char hash_byte = (hash >> shift) & 0xFF;
+		//int shift = (i % sizeof(uint32_t)) * 8;
+		//char hash_byte = (hash >> shift) & 0xFF;
 
-		dest[i] = src[i] ^ hash_byte;
+		//dest[i] = src[i] ^ hash;
+		buf[i] ^= hash;
 	}
 }
 
@@ -202,7 +203,7 @@ typedef struct osprd_info {
 	unsigned write_locking_pid;
 	linked_list_t invalid_tickets;
 
-	uint32_t passwd_hash;
+	uint8_t passwd_hash;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -609,6 +610,8 @@ static void osprd_process_request_queue(request_queue_t *q)
 
 static struct file_operations osprd_blk_fops;
 static int (*blkdev_release)(struct inode *, struct file *);
+static ssize_t (*blkdev_read)(struct file *, char __user *, size_t, loff_t *);
+static ssize_t (*blkdev_write)(struct file *, char __user *, size_t, loff_t *);
 
 static int _osprd_release(struct inode *inode, struct file *filp)
 {
@@ -617,12 +620,71 @@ static int _osprd_release(struct inode *inode, struct file *filp)
 	return (*blkdev_release)(inode, filp);
 }
 
+static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
+			loff_t *loff) {
+	ssize_t ret = (*blkdev_read)(filp, usr, size, loff);
+	osprd_info_t *d = file2osprd(filp);
+	if (!d)
+		return ret;
+
+	char *buf = (char*)kmalloc(size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	int copy_ret = copy_from_user(buf, usr, size);
+	if (copy_ret < 0) {
+		kfree(buf);
+		return -1;
+	}
+
+	xor_cipher(buf, size, d->passwd_hash);
+	
+	copy_ret = copy_to_user(usr, buf, size);
+	kfree(buf);
+	if(copy_ret)
+		return -1;
+	return ret;
+}
+
+static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
+			loff_t *loff) {
+	ssize_t ret = (*blkdev_write)(filp, usr, size, loff);
+	osprd_info_t *d = file2osprd(filp);
+	if (!d)
+		return ret;
+
+	char *buf  = (char*)kmalloc(size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	int copy_ret = copy_from_user(buf, usr, size);
+	if (copy_ret) {
+		kfree(buf);
+		return -1;
+	}
+
+	xor_cipher(buf, size, d->passwd_hash);
+
+	copy_ret = copy_to_user(usr, buf, size);
+	kfree(buf);
+	if (copy_ret)
+		return -1;
+	return ret;
+}
+
 static int _osprd_open(struct inode *inode, struct file *filp)
 {
 	if (!osprd_blk_fops.open) {
 		memcpy(&osprd_blk_fops, filp->f_op, sizeof(osprd_blk_fops));
+
 		blkdev_release = osprd_blk_fops.release;
 		osprd_blk_fops.release = _osprd_release;
+
+		blkdev_read = osprd_blk_fops.read;
+		osprd_blk_fops.read = _osprd_read;
+
+		blkdev_write = osprd_blk_fops.write;
+		osprd_blk_fops.write = _osprd_write;
 	}
 	filp->f_op = &osprd_blk_fops;
 	return osprd_open(inode, filp);
