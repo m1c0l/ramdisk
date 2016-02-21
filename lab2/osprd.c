@@ -503,6 +503,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 
 	} else if (cmd == OSPRDIOCRELEASE) {
+		d->passwd_hash = 0;
 
 		// EXERCISE: Unlock the ramdisk.
 		//
@@ -637,7 +638,9 @@ static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
 		return -1;
 	}
 
+	eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
+	eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	
 	copy_ret = copy_to_user(usr, buf, size);
 	kfree(buf);
@@ -662,8 +665,9 @@ static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
 		kfree(buf);
 		return -1;
 	}
-
+	eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
+	eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 
 	copy_ret = copy_to_user(usr, buf, size);
 	kfree(buf);
@@ -760,6 +764,7 @@ static void cleanup_device(osprd_info_t *d)
 
 	linked_list_free(&d->read_locking_pids);
 	linked_list_free(&d->invalid_tickets);
+	d->passwd_hash = 0;
 }
 
 

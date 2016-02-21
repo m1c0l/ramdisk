@@ -209,9 +209,9 @@ int main(int argc, char *argv[])
 	// Open file with password
 	if (argc >= 2 && strcmp(argv[1], "-p") == 0) {
 		argv++, argc--;
-		printf("passwd!!!\n");
+		//printf("passwd!!!\n");
 		if (argc >= 2 && argv[1][0] != '-') {
-			printf("called\n");
+			//printf("called\n");
 			passwd = argv[1];
 		}
 		else {
