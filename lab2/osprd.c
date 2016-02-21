@@ -164,7 +164,7 @@ uint8_t jenkins_hash(char *passwd) {
 	hash += (hash << 3);
 	hash ^= (hash >> 11);
 	hash += (hash << 15);
-	return (uint8_t)(hash & 0xFF);
+	return (uint8_t)((hash & 0xFF) | 0x80);
 }
 
 void xor_cipher(char *buf, size_t len, uint8_t hash) {
