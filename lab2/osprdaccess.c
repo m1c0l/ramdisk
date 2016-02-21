@@ -31,7 +31,12 @@ Usage: ./osprdaccess -w [SIZE] [OPTIONS] [DEVICE...] < DATA\n\
        Wait DELAY seconds before reading/writing (but after locking).\n\
    DEVICE is the device to read/write.  The default is /dev/osprda.\n\
    You can also give more than one device name.  All devices are opened, but\n\
-   only the last device is read or written.\n");
+   only the last device is read or written.\n\
+   -p [PASSWORD]\n\
+       Encrypt the ramdisk with PASSWORD. The plaintext can be recovered by\n\
+       reading the disk with the same password that was used to write to it.\n\
+       If this option is not provided, the data written or read as plaintext.\n\
+   ");
 	exit(status);
 }
 
