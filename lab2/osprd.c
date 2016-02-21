@@ -651,10 +651,10 @@ static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
 
 static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
 			loff_t *loff) {
-	ssize_t ret = (*blkdev_write)(filp, usr, size, loff);
+	//ssize_t ret = (*blkdev_write)(filp, usr, size, loff);
 	osprd_info_t *d = file2osprd(filp);
 	if (!d)
-		return ret;
+		return (*blkdev_write)(filp, usr, size, loff);
 
 	char *buf  = (char*)kmalloc(size, GFP_KERNEL);
 	if (!buf)
@@ -673,7 +673,8 @@ static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
 	kfree(buf);
 	if (copy_ret)
 		return -1;
-	return ret;
+
+	return (*blkdev_write)(filp, usr, size, loff);
 }
 
 static int _osprd_open(struct inode *inode, struct file *filp)
