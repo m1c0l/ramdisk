@@ -202,6 +202,8 @@ typedef struct osprd_info {
 	unsigned write_locking_pid;
 	linked_list_t invalid_tickets;
 
+	uint32_t passwd_hash;
+
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
@@ -263,12 +265,26 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
 	if (request_type == READ) {
-		memcpy((void*)req->buffer, (void*)data_ptr,
-			req->current_nr_sectors * SECTOR_SIZE);
+		if (d->passwd_hash) {
+			xor_cipher(req->buffer, (char*)data_ptr,
+				req->current_nr_sectors * SECTOR_SIZE,
+				d->passwd_hash);
+		}
+		else { // no password
+			memcpy((void*)req->buffer, (void*)data_ptr,
+				req->current_nr_sectors * SECTOR_SIZE);
+		}
 	}
 	else if (request_type == WRITE) {
-		memcpy((void*)data_ptr, (void*)req->buffer,
-			req->current_nr_sectors * SECTOR_SIZE);
+		if (d->passwd_hash) {
+			xor_cipher((char*)data_ptr, req->buffer,
+				req->current_nr_sectors * SECTOR_SIZE,
+				d->passwd_hash);
+		}
+		else {
+			memcpy((void*)data_ptr, (void*)req->buffer,
+				req->current_nr_sectors * SECTOR_SIZE);
+		}
 	}
 	eprintk("Should process request...\n");
 
@@ -564,6 +580,7 @@ static void osprd_setup(osprd_info_t *d)
 	linked_list_init(&d->read_locking_pids);
 	linked_list_init(&d->invalid_tickets);
 	d->write_locking_pid = 0;
+	d->passwd_hash = 0;
 }
 
 
