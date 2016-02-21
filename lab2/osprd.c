@@ -153,10 +153,10 @@ int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
 
 /* Design problem: crypto code */
 
-uint32_t jenkins_hash(char *passwd, size_t len) {
+uint32_t jenkins_hash(char *passwd) {
 	uint32_t hash = 0;
 	int i;
-	for (i = 0; i < len; i++) {
+	for (i = 0; passwd[i] != '\0'; i++) {
 		hash += passwd[i];
 		hash += (hash << 10);
 		hash ^= (hash >> 6);
