@@ -85,7 +85,7 @@ unsigned linked_list_pop(linked_list_t *ll) {
 	ll->head = ll->head->next;
 	kfree(old_head);
 	ll->size--;
-	eprintk("dec size: %d\n", ll->size);
+	//eprintk("dec size: %d\n", ll->size);
 	return old_pid;
 }
 
@@ -265,7 +265,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	uint8_t *data_ptr;
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
-	eprintk("passwd_hash: %d\n", d->passwd_hash);
+	//eprintk("passwd_hash: %d\n", d->passwd_hash);
 	if (request_type == READ) {
 		memcpy((void*)req->buffer, (void*)data_ptr,
 			req->current_nr_sectors * SECTOR_SIZE);
@@ -274,7 +274,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		memcpy((void*)data_ptr, (void*)req->buffer,
 			req->current_nr_sectors * SECTOR_SIZE);
 	}
-	eprintk("Should process request...\n");
+	//eprintk("Should process request...\n");
 
 	end_request(req, 1);
 }
@@ -333,7 +333,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
-	eprintk("cmd: %d\n", cmd);
+	//eprintk("cmd: %d\n", cmd);
 
 	if (cmd == OSPRDIOCACQUIRE) {
 
@@ -373,7 +373,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to acquire\n");
+		//eprintk("Attempting to acquire\n");
 		unsigned my_ticket;
 		// check deadlock protection
 		osp_spin_lock(&d->mutex);
@@ -384,18 +384,17 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		my_ticket = d->ticket_head;
 		d->ticket_head++;
 		osp_spin_unlock(&d->mutex);
-		eprintk("pid = %d\n", current->pid);
+		//eprintk("pid = %d\n", current->pid);
 
 		if (filp_writable) {
-			eprintk("write %d\n", d->write_locking_pid);
+			//eprintk("write %d\n", d->write_locking_pid);
 			// write lock
 			if (wait_event_interruptible(d->blockq,
-				(eprintk("write locking: %d\nticket_tail: %d\nmy_ticket: %d\nsize: %d\n", d->write_locking_pid, d->ticket_tail, my_ticket, d->read_locking_pids.size) || 1)
-				&&   d->ticket_tail == my_ticket
+				d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0
 				&& d->read_locking_pids.size == 0
 				)) {
-				eprintk("wait_event_interruptible: %d\n", current->pid);
+				//eprintk("wait_event_interruptible: %d\n", current->pid);
 				//osp_spin_lock(&d->mutex);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
@@ -417,7 +416,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
-				eprintk("acquire write lock\n");
+				//eprintk("acquire write lock\n");
 				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				d->write_locking_pid = current->pid;
@@ -430,10 +429,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		else {
 			//read lock
-			eprintk("read\n");
+			//eprintk("read\n");
 			if (wait_event_interruptible(d->blockq,
-				(eprintk("read locking size: %d\nticket_tail: %d\nmy_ticket: %d\n", d->read_locking_pids.size, d->ticket_tail, my_ticket) || 1)
-				&&   d->ticket_tail == my_ticket
+				d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0)) {
 				//osp_spin_lock(&d->mutex);
 				// if blocked
@@ -456,7 +454,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
-				eprintk("read lock\n");
+				//eprintk("read lock\n");
 				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				linked_list_push(&d->read_locking_pids, current->pid);
@@ -478,7 +476,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to try acquire\n");
+		//eprintk("Attempting to try acquire\n");
 		if (filp_writable) {
 			osp_spin_lock(&d->mutex);
 			if (d->write_locking_pid != 0 || d->read_locking_pids.size != 0) {
@@ -523,10 +521,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->write_locking_pid != current->pid) {
 				return -EINVAL;
 			}
-			eprintk("release\n");
+			//eprintk("release\n");
 			d->write_locking_pid = 0;
 			if (d->read_locking_pids.size == 0) {
-				eprintk("unsetting flag\n");
+				//eprintk("unsetting flag\n");
 				filp->f_flags ^= F_OSPRD_LOCKED;
 			}
 			osp_spin_unlock(&d->mutex);
@@ -534,13 +532,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return 0;
 		}
 		else {
-			eprintk("!!!!!reached\n");
+			//eprintk("!!!!!reached\n");
 			if (d->read_locking_pids.size == 0) {
 				return -EINVAL;
 			}
 			osp_spin_lock(&d->mutex);
 			int removeStatus = linked_list_remove(&d->read_locking_pids, current->pid);
-			eprintk("%d\n", removeStatus);
+			//eprintk("%d\n", removeStatus);
 			if (removeStatus) {
 				if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
 					filp->f_flags ^= F_OSPRD_LOCKED;
@@ -560,12 +558,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return -EFAULT;
 		}
 		d->passwd_hash = jenkins_hash(buf);
-		eprintk("OSPRDIOCPASSWD: %d\n", d->passwd_hash);
+		//eprintk("OSPRDIOCPASSWD: %d\n", d->passwd_hash);
 		return 0;
 	}
 	else {
 		r = -ENOTTY; /* unknown command */
-		eprintk("not recognized\n");
+		//eprintk("not recognized\n");
 	}
 	return r;
 }
@@ -638,9 +636,9 @@ static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
 		return -1;
 	}
 
-	eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
-	eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	
 	copy_ret = copy_to_user(usr, buf, size);
 	kfree(buf);
@@ -665,9 +663,9 @@ static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
 		kfree(buf);
 		return -1;
 	}
-	eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
-	eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 
 	copy_ret = copy_to_user(usr, buf, size);
 	kfree(buf);
