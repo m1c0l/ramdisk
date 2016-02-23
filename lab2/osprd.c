@@ -621,58 +621,62 @@ static int _osprd_release(struct inode *inode, struct file *filp)
 
 static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
 			loff_t *loff) {
-	ssize_t ret = (*blkdev_read)(filp, usr, size, loff);
+	ssize_t read = blkdev_read(filp, usr, size, loff);
 	osprd_info_t *d = file2osprd(filp);
-	if (!d)
-		return ret;
+	if (d == NULL) {
+		return read;
+	}
 
 	char *buf = (char*)kmalloc(size, GFP_KERNEL);
-	if (!buf)
+	if (buf == NULL) {
 		return -ENOMEM;
+	}
 
-	int copy_ret = copy_from_user(buf, usr, size);
-	if (copy_ret < 0) {
+	if (copy_from_user(buf, usr, size) != 0) {
 		kfree(buf);
-		return -1;
+		return -EFAULT;
 	}
 
 	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
 	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	
-	copy_ret = copy_to_user(usr, buf, size);
+	if (copy_to_user(usr, buf, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
 	kfree(buf);
-	if(copy_ret)
-		return -1;
-	return ret;
+	return read;
 }
 
 static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
 			loff_t *loff) {
-	//ssize_t ret = (*blkdev_write)(filp, usr, size, loff);
 	osprd_info_t *d = file2osprd(filp);
-	if (!d)
-		return (*blkdev_write)(filp, usr, size, loff);
+	if (d == NULL) {
+		return blkdev_write(filp, usr, size, loff);
+	}
 
 	char *buf  = (char*)kmalloc(size, GFP_KERNEL);
-	if (!buf)
+	if (buf == NULL) {
 		return -ENOMEM;
+	}
 
-	int copy_ret = copy_from_user(buf, usr, size);
-	if (copy_ret) {
+	if (copy_from_user(buf, usr, size) != 0) {
 		kfree(buf);
-		return -1;
+		return -EFAULT;
 	}
 	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 	xor_cipher(buf, size, d->passwd_hash);
 	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
 
-	copy_ret = copy_to_user(usr, buf, size);
-	kfree(buf);
-	if (copy_ret)
-		return -1;
+	if (copy_to_user(usr, buf, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
 
-	return (*blkdev_write)(filp, usr, size, loff);
+	kfree(buf);
+	return blkdev_write(filp, usr, size, loff);
 }
 
 static int _osprd_open(struct inode *inode, struct file *filp)
