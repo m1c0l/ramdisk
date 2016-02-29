@@ -175,7 +175,9 @@ void xor_cipher(char *buf, size_t len, uint8_t hash) {
 		//char hash_byte = (hash >> shift) & 0xFF;
 
 		//dest[i] = src[i] ^ hash;
-		buf[i] ^= hash;
+		if (buf[i]) {
+			buf[i] ^= hash;
+		}
 	}
 }
 
