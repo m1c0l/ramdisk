@@ -31,7 +31,12 @@ Usage: ./osprdaccess -w [SIZE] [OPTIONS] [DEVICE...] < DATA\n\
        Wait DELAY seconds before reading/writing (but after locking).\n\
    DEVICE is the device to read/write.  The default is /dev/osprda.\n\
    You can also give more than one device name.  All devices are opened, but\n\
-   only the last device is read or written.\n");
+   only the last device is read or written.\n\
+   -p [PASSWORD]\n\
+       Encrypt the ramdisk with PASSWORD. The plaintext can be recovered by\n\
+       reading the disk with the same password that was used to write to it.\n\
+       If this option is not provided, the data written or read as plaintext.\n\
+   ");
 	exit(status);
 }
 
@@ -136,6 +141,7 @@ int main(int argc, char *argv[])
 	double delay = 0;
 	double lock_delay = 0;
 	const char *devname = "/dev/osprda";
+	char *passwd = NULL;
 
  flag:
 	// Detect a read/write option
@@ -200,6 +206,21 @@ int main(int argc, char *argv[])
 	if (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))
 		usage(0);
 
+	// Open file with password
+	if (argc >= 2 && strcmp(argv[1], "-p") == 0) {
+		argv++, argc--;
+		//printf("passwd!!!\n");
+		if (argc >= 2 && argv[1][0] != '-') {
+			//printf("called\n");
+			passwd = argv[1];
+		}
+		else {
+			usage(1);
+		}
+		argv++, argc--;
+		goto flag;
+	}
+
 	// Detect a device name
 	if (argc >= 2 && argv[1][1] != '-') {
 		devname = argv[1];
@@ -240,6 +261,14 @@ int main(int argc, char *argv[])
 	if (lseek(devfd, offset, SEEK_SET) == (off_t) -1) {
 		perror("lseek");
 		exit(1);
+	}
+
+	// Set password
+	if (passwd) {
+		if (ioctl(devfd, OSPRDIOCPASSWD, passwd) == -1) {
+			perror("ioctl PASSWD");
+			exit(1);
+		}
 	}
 
 	// Read or write

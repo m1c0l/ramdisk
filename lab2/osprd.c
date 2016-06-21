@@ -85,7 +85,7 @@ unsigned linked_list_pop(linked_list_t *ll) {
 	ll->head = ll->head->next;
 	kfree(old_head);
 	ll->size--;
-	eprintk("dec size: %d\n", ll->size);
+	//eprintk("dec size: %d\n", ll->size);
 	return old_pid;
 }
 
@@ -150,6 +150,37 @@ int return_valid_ticket(linked_list_t *invalid_tickets, int ticket_tail) {
 	return ticket_tail;
 }
 
+
+/* Design problem: crypto code */
+
+uint8_t jenkins_hash(char *passwd) {
+	uint32_t hash = 0;
+	int i;
+	for (i = 0; passwd[i] != '\0'; i++) {
+		hash += passwd[i];
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+	return (uint8_t)((hash & 0xFF) | 0x80);
+}
+
+void xor_cipher(char *buf, size_t len, uint8_t hash) {
+	size_t i;
+	for (i = 0; i < len; i++) {
+		/* extract one byte of the hash */
+		//int shift = (i % sizeof(uint32_t)) * 8;
+		//char hash_byte = (hash >> shift) & 0xFF;
+
+		//dest[i] = src[i] ^ hash;
+		if (buf[i]) {
+			buf[i] ^= hash;
+		}
+	}
+}
+
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
@@ -173,6 +204,8 @@ typedef struct osprd_info {
 	linked_list_t read_locking_pids;
 	unsigned write_locking_pid;
 	linked_list_t invalid_tickets;
+
+	uint8_t passwd_hash;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -234,13 +267,16 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	uint8_t *data_ptr;
 	request_type = rq_data_dir(req);
 	data_ptr = d->data + req->sector * SECTOR_SIZE;
+	//eprintk("passwd_hash: %d\n", d->passwd_hash);
 	if (request_type == READ) {
-		memcpy((void*)req->buffer, (void*)data_ptr, req->current_nr_sectors * SECTOR_SIZE);
+		memcpy((void*)req->buffer, (void*)data_ptr,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
 	else if (request_type == WRITE) {
-		memcpy((void*)data_ptr, (void*)req->buffer, req->current_nr_sectors * SECTOR_SIZE);
+		memcpy((void*)data_ptr, (void*)req->buffer,
+			req->current_nr_sectors * SECTOR_SIZE);
 	}
-	eprintk("Should process request...\n");
+	//eprintk("Should process request...\n");
 
 	end_request(req, 1);
 }
@@ -287,7 +323,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
  *   Called to perform an ioctl on the named file.
  */
 int osprd_ioctl(struct inode *inode, struct file *filp,
-		unsigned int cmd, unsigned long arg)
+		unsigned int cmd, char *passwd)
 {
 	osprd_info_t *d = file2osprd(filp);	// device info
 	int r = 0;			// return value: initially 0
@@ -299,6 +335,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
+	//eprintk("cmd: %d\n", cmd);
 
 	if (cmd == OSPRDIOCACQUIRE) {
 
@@ -338,7 +375,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to acquire\n");
+		//eprintk("Attempting to acquire\n");
 		unsigned my_ticket;
 		// check deadlock protection
 		osp_spin_lock(&d->mutex);
@@ -349,18 +386,17 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		my_ticket = d->ticket_head;
 		d->ticket_head++;
 		osp_spin_unlock(&d->mutex);
-		eprintk("pid = %d\n", current->pid);
+		//eprintk("pid = %d\n", current->pid);
 
 		if (filp_writable) {
-			eprintk("write %d\n", d->write_locking_pid);
+			//eprintk("write %d\n", d->write_locking_pid);
 			// write lock
 			if (wait_event_interruptible(d->blockq,
-				(eprintk("write locking: %d\nticket_tail: %d\nmy_ticket: %d\nsize: %d\n", d->write_locking_pid, d->ticket_tail, my_ticket, d->read_locking_pids.size) || 1)
-				&&   d->ticket_tail == my_ticket
+				d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0
 				&& d->read_locking_pids.size == 0
 				)) {
-				eprintk("wait_event_interruptible: %d\n", current->pid);
+				//eprintk("wait_event_interruptible: %d\n", current->pid);
 				//osp_spin_lock(&d->mutex);
 				// if blocked
 				if(d->ticket_tail == my_ticket) {
@@ -382,7 +418,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
-				eprintk("acquire write lock\n");
+				//eprintk("acquire write lock\n");
 				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				d->write_locking_pid = current->pid;
@@ -395,10 +431,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		else {
 			//read lock
-			eprintk("read\n");
+			//eprintk("read\n");
 			if (wait_event_interruptible(d->blockq,
-				(eprintk("read locking size: %d\nticket_tail: %d\nmy_ticket: %d\n", d->read_locking_pids.size, d->ticket_tail, my_ticket) || 1)
-				&&   d->ticket_tail == my_ticket
+				d->ticket_tail == my_ticket
 				&& d->write_locking_pid == 0)) {
 				//osp_spin_lock(&d->mutex);
 				// if blocked
@@ -421,7 +456,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			else {
 				// acquire the lock
-				eprintk("read lock\n");
+				//eprintk("read lock\n");
 				osp_spin_lock(&d->mutex);
 				filp->f_flags |= F_OSPRD_LOCKED;
 				linked_list_push(&d->read_locking_pids, current->pid);
@@ -443,7 +478,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to try acquire\n");
+		//eprintk("Attempting to try acquire\n");
 		if (filp_writable) {
 			osp_spin_lock(&d->mutex);
 			if (d->write_locking_pid != 0 || d->read_locking_pids.size != 0) {
@@ -468,6 +503,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 
 	} else if (cmd == OSPRDIOCRELEASE) {
+		d->passwd_hash = 0;
 
 		// EXERCISE: Unlock the ramdisk.
 		//
@@ -487,10 +523,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->write_locking_pid != current->pid) {
 				return -EINVAL;
 			}
-			eprintk("release\n");
+			//eprintk("release\n");
 			d->write_locking_pid = 0;
 			if (d->read_locking_pids.size == 0) {
-				eprintk("unsetting flag\n");
+				//eprintk("unsetting flag\n");
 				filp->f_flags ^= F_OSPRD_LOCKED;
 			}
 			osp_spin_unlock(&d->mutex);
@@ -498,13 +534,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return 0;
 		}
 		else {
-			eprintk("!!!!!reached\n");
+			//eprintk("!!!!!reached\n");
 			if (d->read_locking_pids.size == 0) {
 				return -EINVAL;
 			}
 			osp_spin_lock(&d->mutex);
 			int removeStatus = linked_list_remove(&d->read_locking_pids, current->pid);
-			eprintk("%d\n", removeStatus);
+			//eprintk("%d\n", removeStatus);
 			if (removeStatus) {
 				if (d->read_locking_pids.size == 0 && d->write_locking_pid == 0) {
 					filp->f_flags ^= F_OSPRD_LOCKED;
@@ -516,8 +552,21 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return removeStatus ? 0 : -EINVAL;
 		}
 
-	} else
+	}
+	else if (cmd == OSPRDIOCPASSWD) {
+		char *buf = (char*)kmalloc(20, GFP_ATOMIC);
+		if (copy_from_user(buf, (const char __user*) passwd, 20)) {
+			kfree(buf);
+			return -EFAULT;
+		}
+		d->passwd_hash = jenkins_hash(buf);
+		//eprintk("OSPRDIOCPASSWD: %d\n", d->passwd_hash);
+		return 0;
+	}
+	else {
 		r = -ENOTTY; /* unknown command */
+		//eprintk("not recognized\n");
+	}
 	return r;
 }
 
@@ -534,6 +583,7 @@ static void osprd_setup(osprd_info_t *d)
 	linked_list_init(&d->read_locking_pids);
 	linked_list_init(&d->invalid_tickets);
 	d->write_locking_pid = 0;
+	d->passwd_hash = 0;
 }
 
 
@@ -561,6 +611,8 @@ static void osprd_process_request_queue(request_queue_t *q)
 
 static struct file_operations osprd_blk_fops;
 static int (*blkdev_release)(struct inode *, struct file *);
+static ssize_t (*blkdev_read)(struct file *, char __user *, size_t, loff_t *);
+static ssize_t (*blkdev_write)(struct file *, char __user *, size_t, loff_t *);
 
 static int _osprd_release(struct inode *inode, struct file *filp)
 {
@@ -569,12 +621,79 @@ static int _osprd_release(struct inode *inode, struct file *filp)
 	return (*blkdev_release)(inode, filp);
 }
 
+static ssize_t _osprd_read(struct file *filp, char __user *usr, size_t size,
+			loff_t *loff) {
+	ssize_t read = blkdev_read(filp, usr, size, loff);
+	osprd_info_t *d = file2osprd(filp);
+	if (d == NULL) {
+		return read;
+	}
+
+	char *buf = (char*)kmalloc(size, GFP_KERNEL);
+	if (buf == NULL) {
+		return -ENOMEM;
+	}
+
+	if (copy_from_user(buf, usr, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
+	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	xor_cipher(buf, size, d->passwd_hash);
+	//eprintk("READ buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	
+	if (copy_to_user(usr, buf, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
+	kfree(buf);
+	return read;
+}
+
+static ssize_t _osprd_write(struct file *filp, char __user *usr, size_t size,
+			loff_t *loff) {
+	osprd_info_t *d = file2osprd(filp);
+	if (d == NULL) {
+		return blkdev_write(filp, usr, size, loff);
+	}
+
+	char *buf  = (char*)kmalloc(size, GFP_KERNEL);
+	if (buf == NULL) {
+		return -ENOMEM;
+	}
+
+	if (copy_from_user(buf, usr, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+	xor_cipher(buf, size, d->passwd_hash);
+	//eprintk("WRITE buf: %s\npasswd_hash: %d\n", buf, d->passwd_hash);
+
+	if (copy_to_user(usr, buf, size) != 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
+	kfree(buf);
+	return blkdev_write(filp, usr, size, loff);
+}
+
 static int _osprd_open(struct inode *inode, struct file *filp)
 {
 	if (!osprd_blk_fops.open) {
 		memcpy(&osprd_blk_fops, filp->f_op, sizeof(osprd_blk_fops));
+
 		blkdev_release = osprd_blk_fops.release;
 		osprd_blk_fops.release = _osprd_release;
+
+		blkdev_read = osprd_blk_fops.read;
+		osprd_blk_fops.read = _osprd_read;
+
+		blkdev_write = osprd_blk_fops.write;
+		osprd_blk_fops.write = _osprd_write;
 	}
 	filp->f_op = &osprd_blk_fops;
 	return osprd_open(inode, filp);
@@ -650,6 +769,7 @@ static void cleanup_device(osprd_info_t *d)
 
 	linked_list_free(&d->read_locking_pids);
 	linked_list_free(&d->invalid_tickets);
+	d->passwd_hash = 0;
 }
 
 
